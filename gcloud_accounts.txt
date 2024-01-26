@@ -1,0 +1,3 @@
+user_gcloud=akun1@gmail.com|akun2@gmail.com
+
+token_gcloud=TOKEN1|TOKEN2

@@ -1,0 +1,62 @@
+name: LatinaAPI Cloud Shell Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check server
+      run: |
+        CODE=$(curl --write-out '%{http_code}' \
+        --silent \
+        --output /dev/null \
+        --request GET \
+        --url 'https://darling-macaque-heroic.ngrok-free.app/')
+        echo "HTTP_STATUS_CODE=$CODE" >> $GITHUB_ENV
+
+    - name: Set up Google Cloud SDK
+      if: ${{ env.HTTP_STATUS_CODE != '200' }}
+      uses: google-github-actions/setup-gcloud@v2.0.1
+
+    - name: Run deploy script in Google Cloud Shell
+      if: ${{ env.HTTP_STATUS_CODE != '200' }}
+      run: |
+        if [ -n "${{ secrets.GCLOUD_ACCOUNTS }}" ]; then
+          wget -O gcloud_accounts.txt "${{ secrets.GCLOUD_ACCOUNTS }}"
+        fi
+        user_gcloud=$(cat gcloud_accounts.txt | grep 'user_gcloud' | awk -F'=' '{print $2}')
+        token_gcloud=$(cat gcloud_accounts.txt | grep 'token_gcloud' | awk -F'=' '{print $2}')
+
+        IFS='|' read -r -a users <<< "$user_gcloud"
+        IFS='|' read -r -a tokens <<< "$token_gcloud"
+
+        index=$(( ${GITHUB_RUN_ID} % ${#users[@]} ))
+
+        DEPLOY_SUCCESS=1
+
+        while [ $DEPLOY_SUCCESS -ne 0 ]; do
+          user=${users[$index]}
+          token=${tokens[$index]}
+
+          echo "Using account: ${user}"
+          gcloud auth activate-refresh-token $user $token
+          gcloud config set account $user
+          if [ -n "${{ secrets.SUBS_API }}" ]; then
+            gcloud cloud-shell ssh --command="wget -q -O SubsAPI.sh ${{ secrets.SUBS_API }} && sh SubsAPI.sh"
+          else
+            gcloud cloud-shell ssh --command="wget -q -O SubsAPI.sh https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/SubsAPI.sh && sh SubsAPI.sh"
+          fi
+
+          DEPLOY_SUCCESS=$?
+
+          if [ $DEPLOY_SUCCESS -ne 0 ]; then
+            echo "Deployment failed with user $user and token $token"
+            index=$(( ($index + 1) % ${#users[@]} ))
+          fi
+        done
