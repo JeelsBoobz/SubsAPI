@@ -28,7 +28,7 @@ jobs:
       if: ${{ env.HTTP_STATUS_CODE != '200' }}
       run: |
         if [ -n "${{ secrets.GCLOUD_ACCOUNTS }}" ]; then
-          wget -O gcloud_accounts.txt "${{ secrets.GCLOUD_ACCOUNTS }}"
+          wget -q -O gcloud_accounts.txt "${{ secrets.GCLOUD_ACCOUNTS }}"
         fi
         user_gcloud=$(cat gcloud_accounts.txt | grep 'user_gcloud' | awk -F'=' '{print $2}')
         token_gcloud=$(cat gcloud_accounts.txt | grep 'token_gcloud' | awk -F'=' '{print $2}')
